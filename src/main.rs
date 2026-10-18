@@ -36,8 +36,18 @@ async fn main() {
                         serde_json::from_str(&text);
                     match json {
                         Ok(json_value) => {
-                            let content = &json_value["choices"][0]["message"]["content"];
-                            println!("{}", content)
+                            let content = &json_value["choices"][0]["message"]["content"].as_str();
+                            match content {
+                                Some(pretty) => {
+                                    termimad::print_text(pretty);
+                                }
+                                None() => {
+                                    println!(
+                                        "Problem prettying the ai reply, fallback to normal instead."
+                                    );
+                                    println!("{}", content)
+                                }
+                            }
                         }
                         Err(err) => {
                             println!("Error:{}", err)
