@@ -1,35 +1,56 @@
-// use reqwest::Response;
+// define url , api key , prompt and header
+// send the api request
+// parse the output
+// print it
 
+// sending http request requires reqwest which requires an async runtime
 #[tokio::main]
 async fn main() {
+    //define a client to use i guess , but i have no idea why i use clien there i  could just do
+    //reqwest::client::post() or smth
     let client = reqwest::Client::new();
+
+    let url = "https://integrate.api.nvidia.com/v1/chat/completions";
     let api_key = "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";
     let payload = r#"{
-        "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-        "messages": [
-            {"role": "user", "content": "similarities in hindi and japanese"}
+        "model":"nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+        "messages":[
+            {"role":"user","content":"Full form of NASA?"}
         ]
     }"#;
-    let res = client
-        .post("https://integrate.api.nvidia.com/v1/chat/completions")
+
+    let response = client
+        .post(url)
         .header("Authorization", format!("Bearer {api_key}"))
-        .header("Content-Type", "application/json")
+        .header("Content-type", "Application/json")
         .body(payload)
         .send()
         .await;
 
-    match res {
-        Ok(response) => {
-            let body = response.text().await.unwrap();
-            let parsed: serde_json::Value = serde_json::from_str(&body).unwrap();
-            let ai_response_text = parsed["choices"][0]["message"]["content"].as_str().unwrap();
-            // println!("{}", ai_response_text);
-            termimad::print_text(ai_response_text);
+    match response {
+        Ok(res) => {
+            let res_text = res.text().await;
+            match res_text {
+                Ok(text) => {
+                    let json: Result<serde_json::Value, serde_json::error::Error> =
+                        serde_json::from_str(&text);
+                    match json {
+                        Ok(json_value) => {
+                            let content = &json_value["choices"][0]["message"]["content"];
+                            println!("{}", content)
+                        }
+                        Err(err) => {
+                            println!("Error:{}", err)
+                        }
+                    }
+                }
+                Err(err) => {
+                    println!("Error:{}", err);
+                }
+            }
         }
         Err(err) => {
-            println!("error:{}", err);
+            println!("Error:{}", err);
         }
     }
 }
-
-// api key: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
