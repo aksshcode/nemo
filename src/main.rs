@@ -15,8 +15,9 @@ async fn main() {
     let payload = r#"{
         "model":"nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
         "messages":[
-            {"role":"user","content":"Full form of NASA?"}
-        ]
+            {"role":"user","content":"full form of NASA?"}
+        ],
+        "stream":true
     }"#;
 
     let response = client
@@ -28,35 +29,29 @@ async fn main() {
         .await;
 
     match response {
-        Ok(res) => {
-            let res_text = res.text().await;
-            match res_text {
-                Ok(text) => {
-                    let json: Result<serde_json::Value, serde_json::error::Error> =
-                        serde_json::from_str(&text);
-                    match json {
-                        Ok(json_value) => {
-                            let content = &json_value["choices"][0]["message"]["content"];
-                            let content_str_version = content.as_str();
-                            match content_str_version {
-                                Some(pretty) => {
-                                    termimad::print_text(pretty);
+        Ok(mut res) => {
+            while let Ok(Some(chunk)) = res.chunk().await {
+                let string_chunk = String::from_utf8_lossy(&chunk);
+                let string_chunk_lines = string_chunk.lines();
+                for line in string_chunk_lines {
+                    let prefix_stripped = line.strip_prefix("data: ");
+                    match prefix_stripped {
+                        Some(stripped) => {
+                            let json: Result<serde_json::Value, serde_json::Error> =
+                                serde_json::from_str(stripped);
+                            match json {
+                                Ok(processed_res) => {
+                                    let processed_json =
+                                        &processed_res["choices"][0]["delta"]["reasoning_content"];
+                                    println!("{}", processed_json);
                                 }
-                                None => {
-                                    println!(
-                                        "Problem prettying the ai reply, fallback to normal instead."
-                                    );
-                                    println!("{}", content)
+                                Err(err) => {
+                                    println!("Error,{}", err);
                                 }
                             }
                         }
-                        Err(err) => {
-                            println!("Error:{}", err)
-                        }
+                        None => (),
                     }
-                }
-                Err(err) => {
-                    println!("Error:{}", err);
                 }
             }
         }
