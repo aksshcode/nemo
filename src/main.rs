@@ -17,7 +17,7 @@ async fn main() {
     let payload = r#"{
         "model":"nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
         "messages":[
-            {"role":"user","content":"difference between ts and rust?"}
+            {"role":"user","content":"full form of NASA and ISRO?"}
         ],
         "stream":true
     }"#;
@@ -32,43 +32,49 @@ async fn main() {
 
     match response {
         Ok(mut res) => {
-            while let Ok(Some(chunk)) = res.chunk().await {
+            if !res.status().is_success() {
+                eprintln!("HTTP Error {}: {}", res.status(), res.text().await.unwrap_or_default());
+                return;
+            }
+
+            'stream: while let Ok(Some(chunk)) = res.chunk().await {
                 let string_chunk = String::from_utf8_lossy(&chunk);
                 let string_chunk_lines = string_chunk.lines();
                 for line in string_chunk_lines {
                     let chop_the_data_prefix = line.strip_prefix("data: ");
                     match chop_the_data_prefix {
                         Some(chopped) => {
-                            if chopped == "[DONE]" {
-                                break;
+                            if chopped.trim() == "[DONE]" {
+                                break 'stream;
                             }
                             let convert_to_json_attempt: Result<
                                 serde_json::Value,
                                 serde_json::Error,
-                            > = serde_json::from_str(&chopped);
+                            > = serde_json::from_str(chopped);
                             match convert_to_json_attempt {
                                 Ok(json) => {
                                     let content = &json["choices"][0]["delta"];
                                     let delta = content;
                                     if let Some(thought) = delta["reasoning_content"].as_str() {
-                                        let _ = std::io::stdout().flush().unwrap();
                                         print!("\x1b[90m{thought}\x1b[0m");
+                                        let _ = std::io::stdout().flush();
                                     }
                                     if let Some(answer) = delta["content"].as_str() {
-                                        let _ = std::io::stdout().flush().unwrap();
-                                        print!("{answer}")
+                                        print!("{answer}");
+                                        let _ = std::io::stdout().flush();
                                     }
                                 }
-                                Err(err) => println!("Error:{}", err),
+                                Err(err) => eprintln!("JSON Error: {}", err),
                             }
                         }
                         None => (),
                     }
                 }
             }
+            println!();
         }
         Err(err) => {
-            println!("Error:{}", err);
+            eprintln!("Network Error: {}", err);
         }
     }
 }
