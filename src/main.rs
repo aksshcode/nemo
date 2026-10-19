@@ -37,6 +37,8 @@ async fn main() {
                 return;
             }
 
+            let mut full_response = String::new();
+
             'stream: while let Ok(Some(chunk)) = res.chunk().await {
                 let string_chunk = String::from_utf8_lossy(&chunk);
                 let string_chunk_lines = string_chunk.lines();
@@ -60,8 +62,7 @@ async fn main() {
                                         let _ = std::io::stdout().flush();
                                     }
                                     if let Some(answer) = delta["content"].as_str() {
-                                        print!("{answer}");
-                                        let _ = std::io::stdout().flush();
+                                        full_response.push_str(answer);
                                     }
                                 }
                                 Err(err) => eprintln!("JSON Error: {}", err),
@@ -71,7 +72,8 @@ async fn main() {
                     }
                 }
             }
-            println!();
+            println!("\n");
+            termimad::print_text(&full_response);
         }
         Err(err) => {
             eprintln!("Network Error: {}", err);
