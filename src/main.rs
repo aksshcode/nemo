@@ -39,41 +39,41 @@ async fn main() {
 
             let mut full_response = String::new();
 
-            'stream: while let Ok(Some(chunk)) = res.chunk().await {
-                let string_chunk = String::from_utf8_lossy(&chunk);
-                let string_chunk_lines = string_chunk.lines();
-                for line in string_chunk_lines {
-                    let chop_the_data_prefix = line.strip_prefix("data: ");
-                    match chop_the_data_prefix {
-                        Some(chopped) => {
-                            if chopped.trim() == "[DONE]" {
-                                break 'stream;
-                            }
-                            let convert_to_json_attempt: Result<
-                                serde_json::Value,
-                                serde_json::Error,
-                            > = serde_json::from_str(chopped);
-                            match convert_to_json_attempt {
-                                Ok(json) => {
-                                    let content = &json["choices"][0]["delta"];
-                                    let delta = content;
-                                    if let Some(thought) = delta["reasoning_content"].as_str() {
-                                        print!("\x1b[90m{thought}\x1b[0m");
-                                        let _ = std::io::stdout().flush();
-                                    }
-                                    if let Some(answer) = delta["content"].as_str() {
-                                        full_response.push_str(answer);
-                                    }
+            'stream: loop {
+                match res.chunk().await {
+                    Ok(Some(chunk)) => {
+                        let string_chunk = String::from_utf8_lossy(&chunk);
+                        for line in string_chunk.lines() {
+                            if let Some(chopped) = line.strip_prefix("data: ") {
+                                if chopped.trim() == "[DONE]" {
+                                    break 'stream;
                                 }
-                                Err(err) => eprintln!("JSON Error: {}", err),
+                                match serde_json::from_str::<serde_json::Value>(chopped) {
+                                    Ok(json) => {
+                                        let delta = &json["choices"][0]["delta"];
+                                        if let Some(thought) = delta["reasoning_content"].as_str() {
+                                            print!("\x1b[90m{thought}\x1b[0m");
+                                            let _ = std::io::stdout().flush();
+                                        }
+                                        if let Some(answer) = delta["content"].as_str() {
+                                            print!("{answer}");
+                                            let _ = std::io::stdout().flush();
+                                            full_response.push_str(answer);
+                                        }
+                                    }
+                                    Err(err) => eprintln!("JSON Error: {}", err),
+                                }
                             }
                         }
-                        None => (),
+                    }
+                    Ok(None) => break,
+                    Err(err) => {
+                        eprintln!("Socket Error: {}", err);
+                        break;
                     }
                 }
             }
-            println!("\n");
-            termimad::print_text(&full_response);
+            println!();
         }
         Err(err) => {
             eprintln!("Network Error: {}", err);
