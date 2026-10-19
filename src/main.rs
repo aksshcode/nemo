@@ -3,6 +3,8 @@
 // parse the output
 // print it
 
+use std::io::Write;
+
 // sending http request requires reqwest which requires an async runtime
 #[tokio::main]
 async fn main() {
@@ -15,7 +17,7 @@ async fn main() {
     let payload = r#"{
         "model":"nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
         "messages":[
-            {"role":"user","content":"full form of NASA?"}
+            {"role":"user","content":"difference between ts and rust?"}
         ],
         "stream":true
     }"#;
@@ -34,20 +36,30 @@ async fn main() {
                 let string_chunk = String::from_utf8_lossy(&chunk);
                 let string_chunk_lines = string_chunk.lines();
                 for line in string_chunk_lines {
-                    let prefix_stripped = line.strip_prefix("data: ");
-                    match prefix_stripped {
-                        Some(stripped) => {
-                            let json: Result<serde_json::Value, serde_json::Error> =
-                                serde_json::from_str(stripped);
-                            match json {
-                                Ok(processed_res) => {
-                                    let processed_json =
-                                        &processed_res["choices"][0]["delta"]["reasoning_content"];
-                                    println!("{}", processed_json);
+                    let chop_the_data_prefix = line.strip_prefix("data: ");
+                    match chop_the_data_prefix {
+                        Some(chopped) => {
+                            if chopped == "[DONE]" {
+                                break;
+                            }
+                            let convert_to_json_attempt: Result<
+                                serde_json::Value,
+                                serde_json::Error,
+                            > = serde_json::from_str(&chopped);
+                            match convert_to_json_attempt {
+                                Ok(json) => {
+                                    let content = &json["choices"][0]["delta"];
+                                    let delta = content;
+                                    if let Some(thought) = delta["reasoning_content"].as_str() {
+                                        let _ = std::io::stdout().flush().unwrap();
+                                        print!("\x1b[90m{thought}\x1b[0m");
+                                    }
+                                    if let Some(answer) = delta["content"].as_str() {
+                                        let _ = std::io::stdout().flush().unwrap();
+                                        print!("{answer}")
+                                    }
                                 }
-                                Err(err) => {
-                                    println!("Error,{}", err);
-                                }
+                                Err(err) => println!("Error:{}", err),
                             }
                         }
                         None => (),
